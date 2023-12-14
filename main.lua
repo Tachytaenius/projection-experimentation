@@ -2,15 +2,14 @@ local mat4 = require("lib.mathsies").mat4
 local vec3 = require("lib.mathsies").vec3
 local quat = require("lib.mathsies").quat
 
+local loadObj = require("loadObj")
+local consts = require("consts") -- proably move forwardZ etc into consts
+
 math.tau = math.pi * 2
 
-local vertexFormat = {
-	{"VertexPosition", "float", 3},
-	-- {"VertexNormal", "float", 3}
-}
 local forwardZ = 1
 local forwardVector = vec3(0, 0, forwardZ)
-local planeMesh = love.graphics.newMesh(vertexFormat, {
+local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 	{-1, -1, 0, 0, 0, forwardZ},
 	{-1, 1, 0, 0, 0, forwardZ},
 	{1, -1, 0, 0, 0, forwardZ},
@@ -18,6 +17,7 @@ local planeMesh = love.graphics.newMesh(vertexFormat, {
 	{1, -1, 0, 0, 0, forwardZ},
 	{1, 1, 0, 0, 0, forwardZ}
 }, "triangles", "static")
+local sphereMesh = loadObj("meshes/sphere.obj")
 local shader = love.graphics.newShader("shader.glsl")
 
 local eye, retina, pupil, objects
@@ -73,7 +73,18 @@ local function normalMatrix(modelToWorld)
 		m._20, m._21, m._22
 end
 
+function love.keypressed(key)
+	if key == "r" then
+		if retina.type == "rectangle" then
+			retina.type = "sphere"
+		elseif retina.type == "sphere" then
+			retina.type = "rectangle"
+		end
+	end
+end
+
 function love.draw()
+	shader:send("discardBackwardsFragments", false) -- FIXME
 	shader:send("aspectRatio", love.graphics.getWidth() / love.graphics.getHeight())
 
 	-- TODO: Different types of pupil and retina
@@ -89,7 +100,7 @@ function love.draw()
 	-- TODO: Send spheres etc to shader
 
 	love.graphics.setShader(shader)
-	love.graphics.draw(retina.type == "rectangle" and planeMesh)
+	love.graphics.draw(retina.type == "rectangle" and planeMesh or retina.type == "sphere" and sphereMesh)
 	love.graphics.setShader()
 	-- TODO: Skybox, Elite-style indicator showing where forward vector is relative to current orientation, etc (does the skybox need special perspective handling?)
 end

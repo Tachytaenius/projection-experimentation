@@ -1,20 +1,23 @@
 varying vec3 fragmentPosition;
-// varying vec3 fragmentNormal;
+varying vec3 fragmentNormal;
+varying vec3 eyeSpaceFragmentNormal;
 
 uniform vec3 pupilPosition;
+uniform bool discardBackwardsFragments;
 
 #ifdef VERTEX
 
 uniform float aspectRatio;
 uniform float verticalFOV; // TODO
 uniform mat4 retinaToWorld;
-// uniform mat3 retinaToWorldNormal;
+uniform mat3 retinaToWorldNormal;
 
-// attribute vec3 VertexNormal;
+attribute vec3 VertexNormal;
 
 vec4 position(mat4 loveTransform, vec4 homogenVertexPosition) {
-	fragmentPosition = (retinaToWorld * VertexPosition).xyz;
-	// fragmentNormal = retinaToWorldNormal * VertexNormal;
+	fragmentPosition = (retinaToWorld * homogenVertexPosition).xyz;
+	eyeSpaceFragmentNormal = VertexNormal;
+	fragmentNormal = retinaToWorldNormal * VertexNormal;
 
 	vec4 ret = homogenVertexPosition;
 	ret.y *= aspectRatio;
@@ -121,7 +124,10 @@ void tryNewClosestHit(inout bool foundHit, inout RaycastHit closestForwardHit, R
 }
 
 vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords) {
-	// fragmentRayDirection = fragmentNormal;
+	if (discardBackwardsFragments && eyeSpaceFragmentNormal.z < 0.0) {
+		discard;
+	}
+
 	vec3 fragmentRayDirection = normalize(fragmentPosition - pupilPosition);
 
 	bool foundHit = false;
@@ -135,7 +141,7 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords)
 	}
 
 	float cubeSideLength = 1.0;
-	ConvexRaycastResult AABBResult = AABBRaycast(vec3(10.0, 1.0, 0.0), vec3(cubeSideLength), fragmentPosition, fragmentPosition + fragmentRayDirection);
+	ConvexRaycastResult AABBResult = AABBRaycast(vec3(10.0, 1.0, 2.5), vec3(cubeSideLength), fragmentPosition, fragmentPosition + fragmentRayDirection);
 	if (AABBResult.hit) {
 		tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[0]);
 		tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[1]);
