@@ -15,6 +15,7 @@ uniform mat4 retinaToWorld;
 vec4 position(mat4 loveTransform, vec4 homogenVertexPosition) {
 	fragmentPosition = (retinaToWorld * VertexPosition).xyz;
 	// fragmentNormal = retinaToWorldNormal * VertexNormal;
+
 	vec4 ret = homogenVertexPosition;
 	ret.y *= aspectRatio;
 	return ret;
@@ -24,40 +25,127 @@ vec4 position(mat4 loveTransform, vec4 homogenVertexPosition) {
 
 #ifdef PIXEL
 
-// TODO: Struct instead?
-bool sphereRaycast(vec3 spherePosition, float sphereRadius, vec3 rayStart, vec3 rayEnd, out float[2] result) {
+struct RaycastHit {
+	float t;
+	vec3 position;
+	vec3 normal;
+};
+const RaycastHit raycastHitMiss = RaycastHit (0.0, vec3(0.0), vec3(0.0));
+
+struct ConvexRaycastResult {
+	bool hit;
+	RaycastHit[2] hits;
+};
+const ConvexRaycastResult convexRaycastMiss = ConvexRaycastResult (false, RaycastHit[2](raycastHitMiss, raycastHitMiss));
+
+ConvexRaycastResult sphereRaycast(vec3 spherePosition, float sphereRadius, vec3 rayStart, vec3 rayEnd) {
 	if (rayStart == rayEnd) {
-		return false;
+		return convexRaycastMiss;
 	}
 
 	vec3 startToEnd = rayEnd - rayStart;
-	vec3 startToSphere = spherePosition - rayStart;
+	vec3 sphereToStart = rayStart - spherePosition;
 
-	float a = dot(startToEnd, startToEnd);
-	float b = 2.0 * dot(startToSphere, startToEnd);
-	float c = dot(startToSphere, startToSphere) - pow(sphereRadius, 2.0);
-
-	float discriminant = pow(b, 2.0) - 4.0 * a * c;
-	if (discriminant < 0.0) {
-		return false;
+	float b = dot(sphereToStart, startToEnd);
+	float c = dot(sphereToStart, sphereToStart) - pow(sphereRadius, 2.0);
+	float h = pow(b, 2.0) - c;
+	if (h < 0.0) {
+		return convexRaycastMiss;
 	}
+	float t0 = -b - sqrt(h);
+	vec3 pos0 = rayStart + startToEnd * t0;
+	float t1 = -b + sqrt(h);
+	vec3 pos1 = rayStart + startToEnd * t1;
+	return ConvexRaycastResult (
+		true,
+		RaycastHit[2] (
+			RaycastHit (
+				t0,
+				pos0,
+				normalize(pos0 - spherePosition)
+			), RaycastHit (
+				t1,
+				pos1,
+				normalize(pos1 - spherePosition)
+			)
+		)
+	);
+}
 
-	result[0] = (b - sqrt(discriminant)) / (2.0 * a);
-	result[1] = (b + sqrt(discriminant)) / (2.0 * a);
-	return true;
+ConvexRaycastResult AABBRaycast(vec3 AABBPosition, vec3 AABBLengths, vec3 rayStart, vec3 rayEnd) {
+	vec3 startToEnd = rayEnd - rayStart;
+	vec3 AABBToRayStart = rayStart - (AABBPosition + AABBLengths);
+	
+	vec3 a = 1.0 / startToEnd;
+	vec3 b = a * AABBToRayStart;
+	vec3 c = abs(a) * AABBLengths;
+	vec3 d = -b - c;
+	vec3 e = -b + c;
+	float t0 = max(max(d.x, d.y), d.z);
+	float t1 = min(min(e.x, e.y), e.z);
+
+	// TODO: Fix pixels appearing outside the box
+	if (t0 > t1) {
+		return convexRaycastMiss;
+	}
+	vec3 pos0 = rayStart + startToEnd * t0;
+	vec3 pos1 = rayStart + startToEnd * t1;
+	// TODO: Verify normals and positions and "times"
+	return ConvexRaycastResult (
+		true,
+		RaycastHit[2] (
+			RaycastHit (
+				t0,
+				pos0,
+				step(vec3(t0), d) * -sign(startToEnd)
+			),
+			RaycastHit (
+				t1,
+				pos1,
+				step(e, vec3(t1)) * sign(startToEnd)
+			)
+		)
+	);
+}
+
+void tryNewClosestHit(inout bool foundHit, inout RaycastHit closestForwardHit, RaycastHit newHit) {
+	// Is it forward?
+	if (newHit.t < 0.0) {
+		return;
+	}
+	// Nothing to compare to? Is it closer?
+	if (!foundHit || newHit.t < closestForwardHit.t) {
+		closestForwardHit = newHit;
+		foundHit = true;
+	}
 }
 
 vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords) {
 	// fragmentRayDirection = fragmentNormal;
 	vec3 fragmentRayDirection = normalize(fragmentPosition - pupilPosition);
-	// return (vec4(fragmentRayDirection / 2.0 + 0.5, 1.0));
-	float[2] result;
-	if (sphereRaycast(vec3(50.0, 300.0, 240.0), 1.0, fragmentPosition, fragmentPosition + fragmentRayDirection, result)) {
-		if (result[0] > 0.0 && result[1] > 0.0) {
-			return vec4(result[0] - result[1], result[1] - result[0], 1.0, 1.0);
-		}
+
+	bool foundHit = false;
+	RaycastHit closestForwardHit;
+
+	float sphereRadius = 1.0;
+	ConvexRaycastResult sphereResult = sphereRaycast(vec3(10.0, 1.0, 0.0), sphereRadius, fragmentPosition, fragmentPosition + fragmentRayDirection);
+	if (sphereResult.hit) {
+		tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[0]);
+		tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[1]);
 	}
-	return vec4(0.0, 0.0, 0.0, 1.0);
+
+	float cubeSideLength = 1.0;
+	ConvexRaycastResult AABBResult = AABBRaycast(vec3(10.0, 1.0, 0.0), vec3(cubeSideLength), fragmentPosition, fragmentPosition + fragmentRayDirection);
+	if (AABBResult.hit) {
+		tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[0]);
+		tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[1]);
+	}
+
+	if (foundHit) {
+		return vec4(closestForwardHit.normal / 2.0 + 0.5, 1.0);
+	}
+
+	return vec4(0.0);
 }
 
 #endif

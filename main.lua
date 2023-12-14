@@ -24,7 +24,7 @@ local eye, retina, pupil, objects
 
 function love.load()
 	eye = {
-		position = vec3(40, 300, 240),
+		position = vec3(0, 0, 0),
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0))
 	}
 	retina = {
@@ -40,12 +40,6 @@ function love.load()
 	}
 
 	objects = {}
-	-- table.insert(objects, {
-	-- 	type = "sphere",
-	-- 	position = vec3(50, 300, 240),
-	-- 	radius = 200,
-	-- 	colour = {1, 1, 1}
-	-- })
 end
 
 function love.update(dt)
