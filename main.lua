@@ -23,20 +23,22 @@ local shader = love.graphics.newShader("shader.glsl")
 local eye, retina, pupil, objects
 
 function love.load()
+	-- TODO: Move retina to have centre over pupil when in fisheye mode
 	eye = {
 		position = vec3(0, 0, 0),
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0))
 	}
 	retina = {
 		type = "rectangle",
-		position = vec3(),
+		position = vec3(0, 0, forwardZ),
 		orientation = quat(),
 		-- width = 20,
 		-- height = 20
 	}
 	pupil = {
 		type = "point",
-		position = vec3(0, 0, -forwardZ)
+		position = vec3(0, 0, 0),
+		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0)) -- Lines start out pointing on the z
 	}
 
 	objects = {}
@@ -89,13 +91,16 @@ function love.draw()
 
 	-- TODO: Different types of pupil and retina
 
-	local retinaToEye = mat4.transform(retina.position, retina.orientation)
 	local eyeToWorld = mat4.transform(eye.position, eye.orientation)
+
+	local retinaToEye = mat4.transform(retina.position, retina.orientation)
 	local retinaToWorld = eyeToWorld * retinaToEye;
 	shader:send("retinaToWorld", {mat4.components(retinaToWorld)})
 	-- shader:send("retinaToWorldNormal", {normalMatrix(retinaToWorld)})
 
-	shader:send("pupilPosition", {vec3.components(eyeToWorld * pupil.position)})
+	local pupilToEye = mat4.transform(pupil.position, pupil.orientation)
+	local pupilToWorld = eyeToWorld * pupilToEye;
+	shader:send("pupilToWorld", {mat4.components(pupilToWorld)})
 
 	-- TODO: Send spheres etc to shader
 

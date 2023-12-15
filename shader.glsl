@@ -1,3 +1,5 @@
+const vec3 forwardVector = vec3(0.0, 0.0, 1.0);
+
 varying vec3 fragmentPosition;
 varying vec3 fragmentNormal;
 varying vec3 eyeSpaceFragmentNormal;
@@ -27,6 +29,8 @@ vec4 position(mat4 loveTransform, vec4 homogenVertexPosition) {
 #endif
 
 #ifdef PIXEL
+
+uniform mat4 pupilToWorld;
 
 struct RaycastHit {
 	float t;
@@ -123,12 +127,30 @@ void tryNewClosestHit(inout bool foundHit, inout RaycastHit closestForwardHit, R
 	}
 }
 
+// Line extends beyond start and end
+vec3 closestPointOnLine(vec3 lineStart, vec3 lineEnd, vec3 point) {
+	vec3 startToEnd = lineEnd - lineStart;
+	vec3 startToPoint = point - lineStart;
+	
+	vec3 v = startToPoint - startToEnd * dot(startToPoint, startToEnd) / dot(startToEnd, startToEnd);
+
+	return point - v;
+}
+
 vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords) {
 	if (discardBackwardsFragments && eyeSpaceFragmentNormal.z < 0.0) {
 		discard;
 	}
 
+	// For point pupils:
+	vec3 pupilPosition = (pupilToWorld * vec4(vec3(0.0), 1.0)).xyz;
 	vec3 fragmentRayDirection = normalize(fragmentPosition - pupilPosition);
+
+	// For line pupils:
+	// vec3 pupilStartPosition = (pupilToWorld * vec4(vec3(0.0), 1.0)).xyz;
+	// vec3 pupilEndPosition = (pupilToWorld * vec4(forwardVector, 1.0)).xyz;
+	// vec3 pointOnPupil = closestPointOnLine(pupilStartPosition, pupilEndPosition, fragmentPosition);
+	// vec3 fragmentRayDirection = normalize(fragmentPosition - pointOnPupil);
 
 	bool foundHit = false;
 	RaycastHit closestForwardHit;
