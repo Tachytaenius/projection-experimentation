@@ -3,12 +3,16 @@ local vec3 = require("lib.mathsies").vec3
 local quat = require("lib.mathsies").quat
 
 local loadObj = require("loadObj")
+local normaliseOrZero = require("normalise-or-zero")
 local consts = require("consts") -- proably move forwardZ etc into consts
 
 math.tau = math.pi * 2
 
-local forwardZ = 1
+local rightX, upY, forwardZ = 1, 1, 1
+local rightVector = vec3(rightX, 0, 0)
+local upVector = vec3(0, upY, 0)
 local forwardVector = vec3(0, 0, forwardZ)
+
 local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 	{-1, -1, 0, 0, 0, forwardZ},
 	{-1, 1, 0, 0, 0, forwardZ},
@@ -18,9 +22,10 @@ local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 	{1, 1, 0, 0, 0, forwardZ}
 }, "triangles", "static")
 local sphereMesh = loadObj("meshes/sphere.obj")
+
 local shader = love.graphics.newShader("shader.glsl")
 
-local eye, retina, pupil, objects, mode
+local eye, retina, pupil, objects, mode, canvas
 
 function love.load()
 	mode = "linear"
@@ -43,6 +48,8 @@ function love.load()
 	}
 
 	objects = {}
+
+	canvas = love.graphics.newCanvas(love.graphics.getDimensions())
 end
 
 function love.update(dt)
@@ -56,23 +63,23 @@ function love.update(dt)
 
 	local speed = 4
 	local translation = vec3()
-	if love.keyboard.isDown("w") then translation.z = translation.z + speed end
-	if love.keyboard.isDown("s") then translation.z = translation.z - speed end
-	if love.keyboard.isDown("a") then translation.x = translation.x - speed end
-	if love.keyboard.isDown("d") then translation.x = translation.x + speed end
-	if love.keyboard.isDown("q") then translation.y = translation.y - speed end
-	if love.keyboard.isDown("e") then translation.y = translation.y + speed end
-	eye.position = eye.position + vec3.rotate(translation, eye.orientation) * dt
+	if love.keyboard.isDown("d") then translation = translation + rightVector end
+	if love.keyboard.isDown("a") then translation = translation - rightVector end
+	if love.keyboard.isDown("e") then translation = translation + upVector end
+	if love.keyboard.isDown("q") then translation = translation - upVector end
+	if love.keyboard.isDown("w") then translation = translation + forwardVector end
+	if love.keyboard.isDown("s") then translation = translation - forwardVector end
+	eye.position = eye.position + vec3.rotate(normaliseOrZero(translation) * speed, eye.orientation) * dt
 
 	local angularSpeed = math.tau / 4
 	local rotation = vec3()
-	if love.keyboard.isDown("j") then rotation.y = rotation.y - angularSpeed end
-	if love.keyboard.isDown("l") then rotation.y = rotation.y + angularSpeed end
-	if love.keyboard.isDown("i") then rotation.x = rotation.x - angularSpeed end
-	if love.keyboard.isDown("k") then rotation.x = rotation.x + angularSpeed end
-	if love.keyboard.isDown("u") then rotation.z = rotation.z + angularSpeed end
-	if love.keyboard.isDown("o") then rotation.z = rotation.z - angularSpeed end
-	eye.orientation = quat.normalise(eye.orientation * quat.fromAxisAngle(rotation * dt))
+	if love.keyboard.isDown("k") then rotation = rotation + rightVector end
+	if love.keyboard.isDown("i") then rotation = rotation - rightVector end
+	if love.keyboard.isDown("l") then rotation = rotation + upVector end
+	if love.keyboard.isDown("j") then rotation = rotation - upVector end
+	if love.keyboard.isDown("u") then rotation = rotation + forwardVector end
+	if love.keyboard.isDown("o") then rotation = rotation - forwardVector end
+	eye.orientation = quat.normalise(eye.orientation * quat.fromAxisAngle(normaliseOrZero(rotation) * angularSpeed * dt))
 end
 
 -- Used to transform normals
@@ -95,6 +102,9 @@ function love.keypressed(key)
 end
 
 function love.draw()
+	love.graphics.setCanvas(canvas)
+	love.graphics.clear()
+
 	shader:send("discardBackwardsFragments", true)
 	shader:send("aspectRatio", love.graphics.getWidth() / love.graphics.getHeight())
 
@@ -117,4 +127,7 @@ function love.draw()
 	love.graphics.draw(retina.type == "rectangle" and planeMesh or retina.type == "sphere" and sphereMesh)
 	love.graphics.setShader()
 	-- TODO: Skybox, Elite-style indicator showing where forward vector is relative to current orientation, etc (does the skybox need special perspective handling?)
+
+	love.graphics.setCanvas()
+	love.graphics.draw(canvas, 0, love.graphics.getHeight(), 0, 1, -1)
 end
