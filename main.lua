@@ -86,7 +86,7 @@ function love.keypressed(key)
 end
 
 function love.draw()
-	shader:send("discardBackwardsFragments", false) -- FIXME
+	shader:send("discardBackwardsFragments", true)
 	shader:send("aspectRatio", love.graphics.getWidth() / love.graphics.getHeight())
 
 	-- TODO: Different types of pupil and retina
