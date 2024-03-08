@@ -20,17 +20,18 @@ local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 local sphereMesh = loadObj("meshes/sphere.obj")
 local shader = love.graphics.newShader("shader.glsl")
 
-local eye, retina, pupil, objects
+local eye, retina, pupil, objects, mode
 
 function love.load()
-	-- TODO: Move retina to have centre over pupil when in fisheye mode
+	mode = "linear"
+
 	eye = {
 		position = vec3(0, 0, 0),
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0))
 	}
 	retina = {
 		type = "rectangle",
-		position = vec3(0, 0, forwardZ),
+		position = nil, -- Set by mode during update
 		orientation = quat(),
 		-- width = 20,
 		-- height = 20
@@ -45,6 +46,14 @@ function love.load()
 end
 
 function love.update(dt)
+	if mode == "linear" then
+		retina.type = "rectangle"
+		retina.position = forwardVector
+	elseif mode == "fisheye" then
+		retina.type = "sphere"
+		retina.position = vec3
+	end
+
 	local speed = 4
 	local translation = vec3()
 	if love.keyboard.isDown("w") then translation.z = translation.z + speed end
@@ -77,10 +86,10 @@ end
 
 function love.keypressed(key)
 	if key == "r" then
-		if retina.type == "rectangle" then
-			retina.type = "sphere"
-		elseif retina.type == "sphere" then
-			retina.type = "rectangle"
+		if mode == "linear" then
+			mode = "fisheye"
+		elseif mode == "fisheye" then
+			mode = "linear"
 		end
 	end
 end
