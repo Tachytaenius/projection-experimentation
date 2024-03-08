@@ -51,7 +51,7 @@ function love.update(dt)
 		retina.position = forwardVector
 	elseif mode == "fisheye" then
 		retina.type = "sphere"
-		retina.position = vec3
+		retina.position = vec3()
 	end
 
 	local speed = 4
