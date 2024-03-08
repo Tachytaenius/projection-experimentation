@@ -53,15 +53,16 @@ ConvexRaycastResult sphereRaycast(vec3 spherePosition, float sphereRadius, vec3 
 	vec3 startToEnd = rayEnd - rayStart;
 	vec3 sphereToStart = rayStart - spherePosition;
 
-	float b = dot(sphereToStart, startToEnd);
+	float a = dot(startToEnd, startToEnd);
+	float b = 2.0 * dot(sphereToStart, startToEnd);
 	float c = dot(sphereToStart, sphereToStart) - pow(sphereRadius, 2.0);
-	float h = pow(b, 2.0) - c;
+	float h = pow(b, 2.0) - 4.0 * a * c;
 	if (h < 0.0) {
 		return convexRaycastMiss;
 	}
-	float t0 = -b - sqrt(h);
+	float t0 = (-b - sqrt(h)) / (2.0 * a);
 	vec3 pos0 = rayStart + startToEnd * t0;
-	float t1 = -b + sqrt(h);
+	float t1 = (-b + sqrt(h)) / (2.0 * a);
 	vec3 pos1 = rayStart + startToEnd * t1;
 	return ConvexRaycastResult (
 		true,
