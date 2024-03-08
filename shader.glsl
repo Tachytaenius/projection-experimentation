@@ -1,11 +1,8 @@
-const vec3 forwardVector = vec3(0.0, 0.0, 1.0);
+uniform vec3 forwardVector;
 
 varying vec3 fragmentPosition;
-varying vec3 fragmentNormal;
-varying vec3 eyeSpaceFragmentNormal;
-
-uniform vec3 pupilPosition;
-uniform bool discardBackwardsFragments;
+varying vec3 fragmentNormalWorld;
+varying vec3 fragmentNormalCamera;
 
 #ifdef VERTEX
 
@@ -16,12 +13,12 @@ uniform mat3 retinaToWorldNormal;
 
 attribute vec3 VertexNormal;
 
-vec4 position(mat4 loveTransform, vec4 homogenVertexPosition) {
-	fragmentPosition = (retinaToWorld * homogenVertexPosition).xyz;
-	eyeSpaceFragmentNormal = VertexNormal;
-	fragmentNormal = retinaToWorldNormal * VertexNormal;
+vec4 position(mat4 loveTransform, vec4 vertexPositionModel) {
+	fragmentPosition = (retinaToWorld * vertexPositionModel).xyz;
+	fragmentNormalCamera = VertexNormal;
+	fragmentNormalWorld = retinaToWorldNormal * VertexNormal;
 
-	vec4 ret = homogenVertexPosition;
+	vec4 ret = vertexPositionModel;
 	ret.y *= aspectRatio;
 	return ret;
 }
@@ -31,6 +28,7 @@ vec4 position(mat4 loveTransform, vec4 homogenVertexPosition) {
 #ifdef PIXEL
 
 uniform mat4 pupilToWorld;
+uniform bool discardBackwardsFragments;
 
 struct RaycastHit {
 	float t;
@@ -139,7 +137,7 @@ vec3 closestPointOnLine(vec3 lineStart, vec3 lineEnd, vec3 point) {
 }
 
 vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords) {
-	if (discardBackwardsFragments && eyeSpaceFragmentNormal.z < 0.0) {
+	if (discardBackwardsFragments && fragmentNormalCamera.z < 0.0) {
 		discard;
 	}
 
