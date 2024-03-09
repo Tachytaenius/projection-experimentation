@@ -1,3 +1,6 @@
+const int maxSpheres = 32;
+const int maxAABBs = 32;
+
 varying vec3 fragmentPosition;
 varying vec3 fragmentNormalWorld;
 varying vec3 fragmentNormalCamera;
@@ -26,6 +29,22 @@ vec4 position(mat4 loveTransform, vec4 vertexPositionModel) {
 
 uniform mat4 pupilToWorld;
 uniform bool discardBackwardsFragments;
+
+struct Sphere {
+	vec3 position;
+	float radius;
+};
+
+struct AABB {
+	vec3 position;
+	vec3 sideLengths;
+};
+
+uniform int numSpheres;
+uniform Sphere[maxSpheres] spheres;
+
+uniform int numAABBs;
+uniform AABB[maxAABBs] AABBs;
 
 struct RaycastHit {
 	float t;
@@ -151,18 +170,22 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords)
 	bool foundHit = false;
 	RaycastHit closestForwardHit;
 
-	float sphereRadius = 1.0;
-	ConvexRaycastResult sphereResult = sphereRaycast(vec3(10.0, 1.0, 0.0), sphereRadius, fragmentPosition, fragmentPosition + fragmentRayDirection);
-	if (sphereResult.hit) {
-		tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[0]);
-		tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[1]);
+	for (int i = 0; i < numSpheres; i++) {
+		Sphere thisSphere = spheres[i];
+		ConvexRaycastResult sphereResult = sphereRaycast(thisSphere.position, thisSphere.radius, fragmentPosition, fragmentPosition + fragmentRayDirection);
+		if (sphereResult.hit) {
+			tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[0]);
+			tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[1]);
+		}
 	}
 
-	float cubeSideLength = 1.0;
-	ConvexRaycastResult AABBResult = AABBRaycast(vec3(10.0, 1.0, 2.5), vec3(cubeSideLength), fragmentPosition, fragmentPosition + fragmentRayDirection);
-	if (AABBResult.hit) {
-		tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[0]);
-		tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[1]);
+	for (int i = 0; i < numAABBs; i++) {
+		AABB thisAABB = AABBs[i];
+		ConvexRaycastResult AABBResult = AABBRaycast(thisAABB.position, thisAABB.sideLengths, fragmentPosition, fragmentPosition + fragmentRayDirection);
+		if (AABBResult.hit) {
+			tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[0]);
+			tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[1]);
+		}
 	}
 
 	if (foundHit) {

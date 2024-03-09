@@ -28,9 +28,9 @@ local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 }, "triangles", "static")
 local sphereMesh = loadObj("meshes/sphere.obj")
 
-local shader = love.graphics.newShader("shader.glsl")
+local shader
 
-local eye, retina, pupil, objects, mode, canvas
+local eye, retina, pupil, objects, canvas
 
 local function getRetinaScale()
 	local w, h = canvas:getDimensions()
@@ -77,6 +77,23 @@ local function ellipsoidFisheyeRetina()
 	retina.scale = getRetinaScale()
 end
 
+local function resendAllObjects()
+	local numSpheres, numAABBs = 0, 0
+	for _, object in ipairs(objects) do
+		if object.type == "sphere" then
+			shader:send("spheres[" .. numSpheres .. "].position", {vec3.components(object.position)})
+			shader:send("spheres[" .. numSpheres .. "].radius", object.radius)
+			numSpheres = numSpheres + 1
+		elseif object.type == "AABB" then
+			shader:send("AABBs[" .. numAABBs .. "].position", {vec3.components(object.position)})
+			shader:send("AABBs[" .. numAABBs .. "].sideLengths", {vec3.components(object.sideLengths)})
+			numAABBs = numAABBs + 1
+		end
+	end
+	shader:send("numSpheres", numSpheres)
+	shader:send("numAABBs", numAABBs)
+end
+
 function love.load()
 	canvas = love.graphics.newCanvas(love.graphics.getDimensions())
 
@@ -92,10 +109,39 @@ function love.load()
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0)) -- Lines start out pointing on the z
 	}
 
+	shader = love.graphics.newShader("shader.glsl")
+
 	objects = {}
+	local function posAxis()
+		return (love.math.random() * 2 - 1) * 15
+	end
+	local function size()
+		return love.math.random () * 3
+	end
+	for i = 1, 32 do
+		local x, y, z = posAxis(), posAxis(), posAxis()
+		local w, h, d = size(), size(), size()
+		objects[#objects + 1] = {
+			type = "AABB",
+			position = vec3(x, y, z),
+			sideLengths = vec3(w, h, d)
+		}
+	end
+	for i = 1, 32 do
+		local x, y, z = posAxis(), posAxis(), posAxis()
+		-- local r = size()
+		r = 1 -- Consistent size
+		objects[#objects + 1] = {
+			type = "sphere",
+			position = vec3(x, y, z),
+			radius = r
+		}
+	end
 end
 
 function love.update(dt)
+	resendAllObjects()
+
 	local speed = 4
 	local translation = vec3()
 	if love.keyboard.isDown("d") then translation = translation + rightVector end
