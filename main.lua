@@ -4,6 +4,7 @@ local quat = require("lib.mathsies").quat
 
 local loadObj = require("loadObj")
 local normaliseOrZero = require("normalise-or-zero")
+local limitVectorLength = require("limit-vector-length")
 local consts = require("consts") -- proably move forwardZ etc into consts
 
 math.tau = math.pi * 2
@@ -28,9 +29,8 @@ local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 }, "triangles", "static")
 local sphereMesh = loadObj("meshes/sphere.obj")
 
-local shader
-
-local eye, retina, pupil, objects, canvas
+local eye, retina, pupil, objects, canvas, shader
+local mouseDx, mouseDy
 
 local function getRetinaScale()
 	local w, h = canvas:getDimensions()
@@ -139,7 +139,16 @@ function love.load()
 	end
 end
 
+function love.mousepressed()
+	love.mouse.setRelativeMode(not love.mouse.getRelativeMode())
+end
+
 function love.update(dt)
+	if not (mouseDx and mouseDy) or love.mouse.getRelativeMode() == false then
+		mouseDx = 0
+		mouseDy = 0
+	end
+
 	resendAllObjects()
 
 	local speed = 4
@@ -152,15 +161,23 @@ function love.update(dt)
 	if love.keyboard.isDown("s") then translation = translation - forwardVector end
 	eye.position = eye.position + vec3.rotate(normaliseOrZero(translation) * speed, eye.orientation) * dt
 
-	local angularSpeed = math.tau / 4
+	local maxAngularSpeed = math.tau * 2
+	local keyboardRotationSpeed = math.tau / 4
+	local keyboardRotationMultiplier = keyboardRotationSpeed / maxAngularSpeed
+	local mouseMovementForMaxSpeed = 2.5 -- Move 10 units to rotate by maxAngularSpeed radians per second
+	local mouseMovementMultiplier = 1 / (mouseMovementForMaxSpeed * maxAngularSpeed)
 	local rotation = vec3()
-	if love.keyboard.isDown("k") then rotation = rotation + rightVector end
-	if love.keyboard.isDown("i") then rotation = rotation - rightVector end
-	if love.keyboard.isDown("l") then rotation = rotation + upVector end
-	if love.keyboard.isDown("j") then rotation = rotation - upVector end
-	if love.keyboard.isDown("u") then rotation = rotation + forwardVector end
-	if love.keyboard.isDown("o") then rotation = rotation - forwardVector end
-	eye.orientation = quat.normalise(eye.orientation * quat.fromAxisAngle(normaliseOrZero(rotation) * angularSpeed * dt))
+	if love.keyboard.isDown("k") then rotation = rotation + rightVector * keyboardRotationMultiplier end
+	if love.keyboard.isDown("i") then rotation = rotation - rightVector * keyboardRotationMultiplier end
+	if love.keyboard.isDown("l") then rotation = rotation + upVector * keyboardRotationMultiplier end
+	if love.keyboard.isDown("j") then rotation = rotation - upVector * keyboardRotationMultiplier end
+	if love.keyboard.isDown("u") then rotation = rotation + forwardVector * keyboardRotationMultiplier end
+	if love.keyboard.isDown("o") then rotation = rotation - forwardVector * keyboardRotationMultiplier end
+	rotation = rotation + upVector * mouseDx * mouseMovementMultiplier
+	rotation = rotation + rightVector * mouseDy * mouseMovementMultiplier
+	eye.orientation = quat.normalise(eye.orientation * quat.fromAxisAngle(limitVectorLength(rotation, 1) * maxAngularSpeed * dt))
+
+	mouseDx, mouseDy = nil, nil
 end
 
 -- Used to transform normals
@@ -185,6 +202,10 @@ end
 function love.resize(w, h)
 	canvas = love.graphics.newCanvas(w, h)
 	retina.scale = getRetinaScale()
+end
+
+function love.mousemoved(_, _, dx, dy)
+	mouseDx, mouseDy = dx, dy
 end
 
 function love.draw()
