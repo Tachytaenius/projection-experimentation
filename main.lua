@@ -42,8 +42,6 @@ local function fisheyeRetina()
 end
 
 function love.load()
-	mode = "linear"
-
 	eye = {
 		position = vec3(0, 0, 0),
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0))
