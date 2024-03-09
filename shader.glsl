@@ -1,5 +1,3 @@
-uniform vec3 forwardVector;
-
 varying vec3 fragmentPosition;
 varying vec3 fragmentNormalWorld;
 varying vec3 fragmentNormalCamera;
