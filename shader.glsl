@@ -27,9 +27,6 @@ vec4 position(mat4 loveTransform, vec4 vertexPositionModel) {
 
 #ifdef PIXEL
 
-uniform mat4 pupilToWorld;
-uniform bool discardBackwardsFragments;
-
 struct Sphere {
 	vec3 position;
 	float radius;
@@ -40,11 +37,26 @@ struct AABB {
 	vec3 sideLengths;
 };
 
+uniform mat4 pupilToWorld;
+uniform bool discardBackwardsFragments;
+
 uniform int numSpheres;
 uniform Sphere[maxSpheres] spheres;
 
 uniform int numAABBs;
 uniform AABB[maxAABBs] AABBs;
+
+uniform float initialRaySpeed;
+uniform int maxRaySteps;
+uniform float rayTimestep;
+uniform vec3 blackHolePosition;
+uniform float blackHoleRadius;
+uniform float blackHoleGravity;
+uniform float blackHoleExponentPositive;
+uniform vec3 blackHoleColour;
+uniform bool enableBlackHole;
+
+uniform vec3 skyColour;
 
 struct RaycastHit {
 	float t;
@@ -96,11 +108,11 @@ ConvexRaycastResult sphereRaycast(vec3 spherePosition, float sphereRadius, vec3 
 
 ConvexRaycastResult AABBRaycast(vec3 AABBPosition, vec3 AABBLengths, vec3 rayStart, vec3 rayEnd) {
 	vec3 startToEnd = rayEnd - rayStart;
-	vec3 AABBToRayStart = rayStart - (AABBPosition + AABBLengths);
+	vec3 AABBToRayStart = rayStart - (AABBPosition + AABBLengths / 2);
 	
 	vec3 a = 1.0 / startToEnd;
 	vec3 b = a * AABBToRayStart;
-	vec3 c = abs(a) * AABBLengths;
+	vec3 c = abs(a) * AABBLengths / 2;
 	vec3 d = -b - c;
 	vec3 e = -b + c;
 	float t0 = max(max(d.x, d.y), d.z);
@@ -130,9 +142,23 @@ ConvexRaycastResult AABBRaycast(vec3 AABBPosition, vec3 AABBLengths, vec3 raySta
 	);
 }
 
+// Infinitely long ray
 void tryNewClosestHit(inout bool foundHit, inout RaycastHit closestForwardHit, RaycastHit newHit) {
 	// Is it forward?
 	if (newHit.t < 0.0) {
+		return;
+	}
+	// Nothing to compare to? Is it closer?
+	if (!foundHit || newHit.t < closestForwardHit.t) {
+		closestForwardHit = newHit;
+		foundHit = true;
+	}
+}
+
+// Limited-length line segment
+void tryNewClosestHitLimited(inout bool foundHit, inout RaycastHit closestForwardHit, RaycastHit newHit) {
+	// Is it in the right range?
+	if (newHit.t < 0.0 || newHit.t > 1.0) {
 		return;
 	}
 	// Nothing to compare to? Is it closer?
@@ -167,32 +193,53 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords)
 	// vec3 pointOnPupil = closestPointOnLine(pupilStartPosition, pupilEndPosition, fragmentPosition);
 	// vec3 fragmentRayDirection = normalize(fragmentPosition - pointOnPupil);
 
-	bool foundHit = false;
-	RaycastHit closestForwardHit;
+	vec3 rayVelocity = fragmentRayDirection * initialRaySpeed;
+	vec3 currentRayStart = fragmentPosition;
+	for (int rayStepNumber = 0; rayStepNumber < maxRaySteps; rayStepNumber++) {
+		vec3 rayEnd = currentRayStart + rayVelocity * rayTimestep;
 
-	for (int i = 0; i < numSpheres; i++) {
-		Sphere thisSphere = spheres[i];
-		ConvexRaycastResult sphereResult = sphereRaycast(thisSphere.position, thisSphere.radius, fragmentPosition, fragmentPosition + fragmentRayDirection);
+		bool foundHit = false;
+		RaycastHit closestForwardHit;
+
+		for (int i = 0; i < numSpheres; i++) {
+			Sphere thisSphere = spheres[i];
+			ConvexRaycastResult sphereResult = sphereRaycast(thisSphere.position, thisSphere.radius, currentRayStart, rayEnd);
+			if (sphereResult.hit) {
+				tryNewClosestHitLimited(foundHit, closestForwardHit, sphereResult.hits[0]);
+				tryNewClosestHitLimited(foundHit, closestForwardHit, sphereResult.hits[1]);
+			}
+		}
+
+		for (int i = 0; i < numAABBs; i++) {
+			AABB thisAABB = AABBs[i];
+			ConvexRaycastResult AABBResult = AABBRaycast(thisAABB.position, thisAABB.sideLengths, currentRayStart, rayEnd);
+			if (AABBResult.hit) {
+				tryNewClosestHitLimited(foundHit, closestForwardHit, AABBResult.hits[0]);
+				tryNewClosestHitLimited(foundHit, closestForwardHit, AABBResult.hits[1]);
+			}
+		}
+
+		if (foundHit) {
+			return vec4(closestForwardHit.normal / 2.0 + 0.5, 1.0);
+		}
+
+		ConvexRaycastResult sphereResult = sphereRaycast(blackHolePosition, blackHoleRadius, currentRayStart, rayEnd);
 		if (sphereResult.hit) {
-			tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[0]);
-			tryNewClosestHit(foundHit, closestForwardHit, sphereResult.hits[1]);
+			if (
+				0.0 < sphereResult.hits[0].t && sphereResult.hits[0].t < 1.0
+				|| 0.0 < sphereResult.hits[1].t && sphereResult.hits[1].t < 1.0
+			) {
+				return vec4(blackHoleColour, 1.0);
+			}
 		}
+
+		vec3 rayToBlackHole = blackHolePosition - currentRayStart;
+		rayVelocity += normalize(rayToBlackHole) * blackHoleGravity * pow(length(rayToBlackHole), -blackHoleExponentPositive);
+
+		currentRayStart = rayEnd;
 	}
 
-	for (int i = 0; i < numAABBs; i++) {
-		AABB thisAABB = AABBs[i];
-		ConvexRaycastResult AABBResult = AABBRaycast(thisAABB.position, thisAABB.sideLengths, fragmentPosition, fragmentPosition + fragmentRayDirection);
-		if (AABBResult.hit) {
-			tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[0]);
-			tryNewClosestHit(foundHit, closestForwardHit, AABBResult.hits[1]);
-		}
-	}
-
-	if (foundHit) {
-		return vec4(closestForwardHit.normal / 2.0 + 0.5, 1.0);
-	}
-
-	return vec4(0.0);
+	return vec4(skyColour, 1.0);
 }
 
 #endif

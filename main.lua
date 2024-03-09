@@ -19,6 +19,8 @@ local defaultRaycastVerticalFOVLinear = math.rad(90)
 
 local defaultRaycastSphereRadiusFisheye = 0.125
 
+local canvasScale = 0.25
+
 local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 	{-1, -1, 0, 0, 0, forwardZ},
 	{-1, 1, 0, 0, 0, forwardZ},
@@ -31,6 +33,8 @@ local sphereMesh = loadObj("meshes/sphere.obj")
 
 local eye, retina, pupil, objects, canvas, shader
 local mouseDx, mouseDy
+
+local time
 
 local function getRetinaScale()
 	local w, h = canvas:getDimensions()
@@ -94,12 +98,19 @@ local function resendAllObjects()
 	shader:send("numAABBs", numAABBs)
 end
 
+local function rebuildCanvas()
+	local w, h = love.graphics.getDimensions()
+	canvas = love.graphics.newCanvas(w * canvasScale, h * canvasScale)
+end
+
 function love.load()
-	canvas = love.graphics.newCanvas(love.graphics.getDimensions())
+	love.graphics.setDefaultFilter("nearest")
+
+	rebuildCanvas()
 
 	eye = {
 		position = vec3(0, 0, 0),
-		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0))
+		orientation = quat()
 	}
 	retina = {}
 	linearRetina()
@@ -130,13 +141,23 @@ function love.load()
 	for i = 1, 32 do
 		local x, y, z = posAxis(), posAxis(), posAxis()
 		-- local r = size()
-		r = 1 -- Consistent size
+		local r = 1 -- Consistent size
 		objects[#objects + 1] = {
 			type = "sphere",
 			position = vec3(x, y, z),
 			radius = r
 		}
 	end
+
+	-- objects = {
+	-- 	{
+	-- 		type = "AABB",
+	-- 		position = vec3(2, 2, 4.95),
+	-- 		sideLengths = vec3(6, 6, 0.1)
+	-- 	}
+	-- }
+
+	time = 0
 end
 
 function love.mousepressed()
@@ -177,6 +198,8 @@ function love.update(dt)
 	rotation = rotation + rightVector * mouseDy * mouseMovementMultiplier
 	eye.orientation = quat.normalise(eye.orientation * quat.fromAxisAngle(limitVectorLength(rotation, 1) * maxAngularSpeed * dt))
 
+	time = time + dt
+
 	mouseDx, mouseDy = nil, nil
 end
 
@@ -200,7 +223,7 @@ function love.keypressed(key)
 end
 
 function love.resize(w, h)
-	canvas = love.graphics.newCanvas(w, h)
+	rebuildCanvas()
 	retina.scale = getRetinaScale()
 end
 
@@ -213,6 +236,18 @@ function love.draw()
 	love.graphics.clear()
 
 	shader:send("discardBackwardsFragments", true)
+
+	shader:send("skyColour", {0.1, 0.1, 0.1})
+
+	shader:send("initialRaySpeed", 10)
+	shader:send("maxRaySteps", 200)
+	shader:send("rayTimestep", 0.025)
+	shader:send("blackHolePosition", {5, 5, 5})
+	shader:send("blackHoleRadius", 1.5)
+	shader:send("blackHoleGravity", 30)
+	shader:send("blackHoleExponentPositive", 2) -- 2 for inverse square law gravity (distance ^ -2)
+	shader:send("blackHoleColour", {0, 0, 0})
+	-- shader:send("enableBlackHole", true)
 
 	-- TODO: Different types of pupil and retina
 
@@ -255,5 +290,5 @@ function love.draw()
 	-- TODO: Skybox, Elite-style indicator showing where forward vector is relative to current orientation, etc (does the skybox need special perspective handling?)
 
 	love.graphics.setCanvas()
-	love.graphics.draw(canvas, 0, love.graphics.getHeight(), 0, 1, -1)
+	love.graphics.draw(canvas, 0, love.graphics.getHeight(), 0, 1 / canvasScale, -1 / canvasScale)
 end
