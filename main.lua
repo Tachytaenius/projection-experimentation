@@ -13,6 +13,8 @@ local rightVector = vec3(rightX, 0, 0)
 local upVector = vec3(0, upY, 0)
 local forwardVector = vec3(0, 0, forwardZ)
 
+local defaultRaycastNearPlaneDistanceLinear = 1
+
 local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 	{-1, -1, 0, 0, 0, forwardZ},
 	{-1, 1, 0, 0, 0, forwardZ},
@@ -27,6 +29,18 @@ local shader = love.graphics.newShader("shader.glsl")
 
 local eye, retina, pupil, objects, mode, canvas
 
+local function linearRetina()
+	retina.type = "rectangle"
+	retina.position = forwardVector * defaultRaycastNearPlaneDistanceLinear
+	retina.orientation = quat()
+end
+
+local function fisheyeRetina()
+	retina.type = "sphere"
+	retina.position = vec3()
+	retina.orientation = quat()
+end
+
 function love.load()
 	mode = "linear"
 
@@ -34,13 +48,8 @@ function love.load()
 		position = vec3(0, 0, 0),
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0))
 	}
-	retina = {
-		type = "rectangle",
-		position = nil, -- Set by mode during update
-		orientation = quat(),
-		-- width = 20,
-		-- height = 20
-	}
+	retina = {}
+	linearRetina()
 	pupil = {
 		type = "point",
 		position = vec3(0, 0, 0),
@@ -53,14 +62,6 @@ function love.load()
 end
 
 function love.update(dt)
-	if mode == "linear" then
-		retina.type = "rectangle"
-		retina.position = forwardVector
-	elseif mode == "fisheye" then
-		retina.type = "sphere"
-		retina.position = vec3()
-	end
-
 	local speed = 4
 	local translation = vec3()
 	if love.keyboard.isDown("d") then translation = translation + rightVector end
@@ -92,12 +93,10 @@ local function normalMatrix(modelToWorld)
 end
 
 function love.keypressed(key)
-	if key == "r" then
-		if mode == "linear" then
-			mode = "fisheye"
-		elseif mode == "fisheye" then
-			mode = "linear"
-		end
+	if key == "1" then -- Linear
+		linearRetina()
+	elseif key == "2" then
+		fisheyeRetina()
 	end
 end
 
