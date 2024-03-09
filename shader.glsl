@@ -8,6 +8,7 @@ uniform float aspectRatio;
 uniform float verticalFOV; // TODO
 uniform mat4 retinaToWorld;
 uniform mat3 retinaToWorldNormal;
+uniform vec3 retinaScaleClip; // How to scale the retina mesh as it is displayed to the screen. Scaling the interpreted positions for the raycasting is done within retinaToWorld
 
 attribute vec3 VertexNormal;
 
@@ -16,9 +17,7 @@ vec4 position(mat4 loveTransform, vec4 vertexPositionModel) {
 	fragmentNormalCamera = VertexNormal;
 	fragmentNormalWorld = retinaToWorldNormal * VertexNormal;
 
-	vec4 ret = vertexPositionModel;
-	ret.y *= aspectRatio;
-	return ret;
+	return vertexPositionModel * vec4(retinaScaleClip, 1.0);
 }
 
 #endif

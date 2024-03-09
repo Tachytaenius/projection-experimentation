@@ -13,7 +13,10 @@ local rightVector = vec3(rightX, 0, 0)
 local upVector = vec3(0, upY, 0)
 local forwardVector = vec3(0, 0, forwardZ)
 
-local defaultRaycastNearPlaneDistanceLinear = 1
+local defaultRaycastNearPlaneDistanceLinear = 0.125
+local defaultRaycastVerticalFOVLinear = math.rad(90)
+
+local defaultRaycastSphereRadiusFisheye = 0.125
 
 local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 	{-1, -1, 0, 0, 0, forwardZ},
@@ -29,19 +32,54 @@ local shader = love.graphics.newShader("shader.glsl")
 
 local eye, retina, pupil, objects, mode, canvas
 
+local function getRetinaScale()
+	local w, h = canvas:getDimensions()
+	local aspect = w / h
+	if retina.type == "rectangle" then
+		-- Vertical FOV defines the scale on the y axis
+		-- The scale on the x axis is defined from the scale on the y and the aspect, whether that causes a larger or smaller horizontal FOV
+		-- Maybe I should replace vertical FOV with a "FOV of largest axis"...?
+		return vec3(
+			aspect * math.tan(defaultRaycastVerticalFOVLinear / 2),
+			math.tan(defaultRaycastVerticalFOVLinear / 2),
+			1
+		) * defaultRaycastNearPlaneDistanceLinear
+	elseif retina.type == "ellipsoid" then
+		-- Similar approach as with rectangle retinae
+		return vec3(
+			aspect * 1,
+			1,
+			1
+		) * defaultRaycastSphereRadiusFisheye
+	elseif retina.type == "sphere" then
+		return vec3(defaultRaycastSphereRadiusFisheye)
+	end
+end
+
 local function linearRetina()
 	retina.type = "rectangle"
 	retina.position = forwardVector * defaultRaycastNearPlaneDistanceLinear
 	retina.orientation = quat()
+	retina.scale = getRetinaScale()
 end
 
 local function fisheyeRetina()
 	retina.type = "sphere"
 	retina.position = vec3()
 	retina.orientation = quat()
+	retina.scale = getRetinaScale()
+end
+
+local function ellipsoidFisheyeRetina()
+	retina.type = "ellipsoid"
+	retina.position = vec3()
+	retina.orientation = quat()
+	retina.scale = getRetinaScale()
 end
 
 function love.load()
+	canvas = love.graphics.newCanvas(love.graphics.getDimensions())
+
 	eye = {
 		position = vec3(0, 0, 0),
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0))
@@ -55,8 +93,6 @@ function love.load()
 	}
 
 	objects = {}
-
-	canvas = love.graphics.newCanvas(love.graphics.getDimensions())
 end
 
 function love.update(dt)
@@ -95,7 +131,14 @@ function love.keypressed(key)
 		linearRetina()
 	elseif key == "2" then
 		fisheyeRetina()
+	elseif key == "3" then
+		ellipsoidFisheyeRetina()
 	end
+end
+
+function love.resize(w, h)
+	canvas = love.graphics.newCanvas(w, h)
+	retina.scale = getRetinaScale()
 end
 
 function love.draw()
@@ -103,13 +146,12 @@ function love.draw()
 	love.graphics.clear()
 
 	shader:send("discardBackwardsFragments", true)
-	shader:send("aspectRatio", love.graphics.getWidth() / love.graphics.getHeight())
 
 	-- TODO: Different types of pupil and retina
 
 	local eyeToWorld = mat4.transform(eye.position, eye.orientation)
 
-	local retinaToEye = mat4.transform(retina.position, retina.orientation)
+	local retinaToEye = mat4.transform(retina.position, retina.orientation, retina.scale)
 	local retinaToWorld = eyeToWorld * retinaToEye;
 	shader:send("retinaToWorld", {mat4.components(retinaToWorld)})
 	-- shader:send("retinaToWorldNormal", {normalMatrix(retinaToWorld)})
@@ -120,8 +162,28 @@ function love.draw()
 
 	-- TODO: Send spheres etc to shader
 
+	local aspect = canvas:getWidth() / canvas:getHeight()
+	local retinaScaleClip
+	-- The goal is to show the whole retina on the screen
+	if
+		retina.type == "rectangle"
+		or retina.type == "ellipsoid"
+	then
+		retinaScaleClip = vec3(1) -- No scaling, since [-1, 1] already maps to the corners of the viewport regardless of aspect
+	elseif retina.type == "sphere" then
+		retinaScaleClip = vec3( -- Show whole of sphere on screen
+			math.min(1 / aspect, 1),
+			math.min(aspect, 1),
+			1
+		)
+	end
+	shader:send("retinaScaleClip", {vec3.components(retinaScaleClip)})
+
 	love.graphics.setShader(shader)
-	love.graphics.draw(retina.type == "rectangle" and planeMesh or retina.type == "sphere" and sphereMesh)
+	love.graphics.draw(
+		retina.type == "rectangle" and planeMesh or
+		(retina.type == "sphere" or retina.type == "ellipsoid") and sphereMesh
+	)
 	love.graphics.setShader()
 	-- TODO: Skybox, Elite-style indicator showing where forward vector is relative to current orientation, etc (does the skybox need special perspective handling?)
 
