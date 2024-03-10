@@ -239,15 +239,19 @@ function love.draw()
 
 	shader:send("skyColour", {0.1, 0.1, 0.1})
 
-	shader:send("initialRaySpeed", 10)
-	shader:send("maxRaySteps", 200)
-	shader:send("rayTimestep", 0.025)
-	shader:send("blackHolePosition", {5, 5, 5})
-	shader:send("blackHoleRadius", 1.5)
-	shader:send("blackHoleGravity", 30)
-	shader:send("blackHoleExponentPositive", 2) -- 2 for inverse square law gravity (distance ^ -2)
-	shader:send("blackHoleColour", {0, 0, 0})
-	-- shader:send("enableBlackHole", true)
+	if true then
+		shader:send("initialRaySpeed", 10)
+		shader:send("maxRaySteps", 200)
+		shader:send("rayTimestep", 0.025)
+		shader:send("blackHolePosition", {5, 5, 5})
+		shader:send("blackHoleRadius", 1.5)
+		shader:send("blackHoleGravity", 30)
+		shader:send("blackHoleExponentPositive", 2) -- 2 for inverse square law gravity (distance ^ -2)
+		shader:send("blackHoleColour", {0, 0, 0})
+		shader:send("limitedRays", true)
+	else
+
+	end
 
 	-- TODO: Different types of pupil and retina
 
