@@ -34,7 +34,7 @@ local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 local sphereMesh = loadObj("meshes/sphere.obj")
 
 local eye, retina, pupil, objects, canvas, shader
-local enableBlackHoles, showHelp
+local enableBlackHoles, showHelp, solidColourSky
 local mouseDx, mouseDy
 
 local time
@@ -139,7 +139,11 @@ function love.load()
 		orientation = quat.fromAxisAngle(vec3(0, math.tau / 4, 0)) -- Lines start out pointing on the z
 	}
 
-	shader = love.graphics.newShader("shader.glsl")
+	shader = love.graphics.newShader(
+		love.filesystem.read("shaders/include/lib/simplex3d.glsl") ..
+		love.filesystem.read("shaders/include/sky.glsl") ..
+		love.filesystem.read("shaders/main.glsl")
+	)
 
 	objects = {}
 	local function posAxis()
@@ -177,7 +181,7 @@ function love.load()
 			position = vec3(x, y, z),
 			radius = r,
 			gravityExponent = -2,
-			gravityStrength = r / maxSize * 100,
+			gravityStrength = r / maxSize * 150,
 			colour = {0, 0, 0}
 		}
 	end
@@ -185,6 +189,7 @@ function love.load()
 	time = 0
 
 	showHelp = true
+	solidColourSky = true
 end
 
 function love.mousepressed()
@@ -199,7 +204,7 @@ function love.update(dt)
 
 	resendAllObjects()
 
-	local speed = 4
+	local speed = love.keyboard.isDown("lshift") and 20 or 4
 	local translation = vec3()
 	if love.keyboard.isDown("d") then translation = translation + rightVector end
 	if love.keyboard.isDown("a") then translation = translation - rightVector end
@@ -253,6 +258,8 @@ function love.keypressed(key)
 		rebuildCanvas()
 	elseif key == "h" then
 		showHelp = not showHelp
+	elseif key == "z" then
+		solidColourSky = not solidColourSky
 	end
 end
 
@@ -271,8 +278,6 @@ function love.draw()
 
 	shader:send("discardBackwardsFragments", true)
 
-	shader:send("skyColour", {0.1, 0.1, 0.1})
-
 	if enableBlackHoles then
 		shader:send("initialRaySpeed", 10)
 		shader:send("maxRaySteps", 200)
@@ -283,6 +288,13 @@ function love.draw()
 		shader:send("maxRaySteps", 1)
 		shader:send("rayTimestep", 1)
 		shader:send("limitedRays", false)
+	end
+
+	if solidColourSky then
+		shader:send("solidSky", true)
+		shader:send("solidSkyColour", {0.1, 0.1, 0.1})
+	else
+		shader:send("solidSky", false)
 	end
 
 	-- TODO: Different types of pupil and retina
@@ -331,10 +343,12 @@ function love.draw()
 	if showHelp then
 		love.graphics.print(
 			"WASDQE: Translate\n" ..
+			"LShift: Translate faster\n" ..
 			"IJKLUO and mouse: Rotate\n" ..
 			"Click: Grab/ungrab mouse\n" ..
 			"B: Toggle black holes (and limited segmented rays and reduced resolution)\n" ..
 			"1: Linear, 2: Spherical fisheye, 3: Ellipsoid Fisheye\n" ..
+			"Z: Toggle solid colour sky\n" ..
 			"H: Toggle help"
 		)
 	end

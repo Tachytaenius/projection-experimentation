@@ -1,3 +1,7 @@
+// Dependencies:
+// include/lib/simplex3d.glsl
+// include/sky.glsl
+
 const int maxSpheres = 32;
 const int maxAABBs = 32;
 const int maxBlackHoles = 32;
@@ -63,7 +67,8 @@ uniform int maxRaySteps;
 uniform float rayTimestep;
 uniform bool limitedRays; // If this is false, expect initialRaySpeed, maxRaySteps, and rayTimestep to be 1, and for there to be no black holes
 
-uniform vec3 skyColour;
+uniform bool solidSky;
+uniform vec3 solidSkyColour;
 
 struct RaycastHit {
 	float t;
@@ -237,6 +242,9 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords)
 		currentRayStart = rayEnd;
 	}
 
+	vec3 skyColour = solidSky ? solidSkyColour : sampleSky(
+		normalize(currentRayStart + rayVelocity * rayTimestep)
+	);
 	return vec4(skyColour, 1.0);
 }
 
