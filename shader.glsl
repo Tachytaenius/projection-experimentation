@@ -1,5 +1,6 @@
 const int maxSpheres = 32;
 const int maxAABBs = 32;
+const int maxBlackHoles = 32;
 
 varying vec3 fragmentPosition;
 varying vec3 fragmentNormalWorld;
@@ -37,6 +38,14 @@ struct AABB {
 	vec3 sideLengths;
 };
 
+struct BlackHole {
+	vec3 position;
+	float radius;
+	float gravityExponent;
+	float gravityStrength;
+	vec3 colour;
+};
+
 uniform mat4 pupilToWorld;
 uniform bool discardBackwardsFragments;
 
@@ -46,15 +55,13 @@ uniform Sphere[maxSpheres] spheres;
 uniform int numAABBs;
 uniform AABB[maxAABBs] AABBs;
 
+uniform int numBlackHoles;
+uniform BlackHole[maxBlackHoles] blackHoles;
+
 uniform float initialRaySpeed;
 uniform int maxRaySteps;
 uniform float rayTimestep;
-uniform vec3 blackHolePosition;
-uniform float blackHoleRadius;
-uniform float blackHoleGravity;
-uniform float blackHoleExponentPositive;
-uniform vec3 blackHoleColour;
-uniform bool limitedRays; // If this is false, expect maxRaySteps to be 1 and for there to be no black holes
+uniform bool limitedRays; // If this is false, expect initialRaySpeed, maxRaySteps, and rayTimestep to be 1, and for there to be no black holes
 
 uniform vec3 skyColour;
 
@@ -208,18 +215,24 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords)
 			}
 		}
 
-		ConvexRaycastResult blackHoleResult = sphereRaycast(blackHolePosition, blackHoleRadius, currentRayStart, rayEnd);
-		if (blackHoleResult.hit) {
-			tryNewClosestHit(limitedRays, foundHit, closestForwardHit, currentColour, blackHoleResult.hits[0], blackHoleColour);
-			tryNewClosestHit(limitedRays, foundHit, closestForwardHit, currentColour, blackHoleResult.hits[1], blackHoleColour);
+		for (int i = 0; i < numBlackHoles; i++ ) {
+			BlackHole blackHole = blackHoles[i];
+			ConvexRaycastResult blackHoleResult = sphereRaycast(blackHole.position, blackHole.radius, currentRayStart, rayEnd);
+			if (blackHoleResult.hit) {
+				tryNewClosestHit(limitedRays, foundHit, closestForwardHit, currentColour, blackHoleResult.hits[0], blackHole.colour);
+				tryNewClosestHit(limitedRays, foundHit, closestForwardHit, currentColour, blackHoleResult.hits[1], blackHole.colour);
+			}
 		}
 
 		if (foundHit) {
 			return vec4(currentColour, 1.0);
 		}
 
-		vec3 rayToBlackHole = blackHolePosition - currentRayStart;
-		rayVelocity += normalize(rayToBlackHole) * blackHoleGravity * pow(length(rayToBlackHole), -blackHoleExponentPositive);
+		for (int i = 0; i < numBlackHoles; i++ ) {
+			BlackHole blackHole = blackHoles[i];
+			vec3 rayToBlackHole = blackHole.position - currentRayStart;
+			rayVelocity += normalize(rayToBlackHole) * blackHole.gravityStrength * pow(length(rayToBlackHole), blackHole.gravityExponent) * rayTimestep;
+		}
 
 		currentRayStart = rayEnd;
 	}

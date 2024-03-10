@@ -19,7 +19,9 @@ local defaultRaycastVerticalFOVLinear = math.rad(90)
 
 local defaultRaycastSphereRadiusFisheye = 0.125
 
-local canvasScale = 0.25
+local blackHoleCanvasScale = 0.25
+local noBlackHoleCanvasScale = 1
+local currentCanvasScale
 
 local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 	{-1, -1, 0, 0, 0, forwardZ},
@@ -32,6 +34,7 @@ local planeMesh = love.graphics.newMesh(consts.vertexFormat, {
 local sphereMesh = loadObj("meshes/sphere.obj")
 
 local eye, retina, pupil, objects, canvas, shader
+local enableBlackHoles, showHelp
 local mouseDx, mouseDy
 
 local time
@@ -82,7 +85,9 @@ local function ellipsoidFisheyeRetina()
 end
 
 local function resendAllObjects()
-	local numSpheres, numAABBs = 0, 0
+	local numSpheres = 0
+	local numAABBs = 0
+	local numBlackHoles = 0
 	for _, object in ipairs(objects) do
 		if object.type == "sphere" then
 			shader:send("spheres[" .. numSpheres .. "].position", {vec3.components(object.position)})
@@ -92,18 +97,32 @@ local function resendAllObjects()
 			shader:send("AABBs[" .. numAABBs .. "].position", {vec3.components(object.position)})
 			shader:send("AABBs[" .. numAABBs .. "].sideLengths", {vec3.components(object.sideLengths)})
 			numAABBs = numAABBs + 1
+		elseif
+			object.type == "blackHole"
+			and enableBlackHoles
+		then
+			shader:send("blackHoles[" .. numBlackHoles .. "].position", {vec3.components(object.position)})
+			shader:send("blackHoles[" .. numBlackHoles .. "].radius", object.radius)
+			shader:send("blackHoles[" .. numBlackHoles .. "].colour", object.colour)
+			shader:send("blackHoles[" .. numBlackHoles .. "].gravityExponent", object.gravityExponent)
+			shader:send("blackHoles[" .. numBlackHoles .. "].gravityStrength", object.gravityStrength)
+			numBlackHoles = numBlackHoles + 1
 		end
 	end
 	shader:send("numSpheres", numSpheres)
 	shader:send("numAABBs", numAABBs)
+	shader:send("numBlackHoles", numBlackHoles)
 end
 
 local function rebuildCanvas()
 	local w, h = love.graphics.getDimensions()
-	canvas = love.graphics.newCanvas(w * canvasScale, h * canvasScale)
+	canvas = love.graphics.newCanvas(w * currentCanvasScale, h * currentCanvasScale)
 end
 
 function love.load()
+	enableBlackHoles = false
+	currentCanvasScale = noBlackHoleCanvasScale
+
 	love.graphics.setDefaultFilter("nearest")
 
 	rebuildCanvas()
@@ -129,7 +148,7 @@ function love.load()
 	local function size()
 		return love.math.random () * 3
 	end
-	for i = 1, 32 do
+	for _ = 1, 32 do
 		local x, y, z = posAxis(), posAxis(), posAxis()
 		local w, h, d = size(), size(), size()
 		objects[#objects + 1] = {
@@ -138,7 +157,7 @@ function love.load()
 			sideLengths = vec3(w, h, d)
 		}
 	end
-	for i = 1, 32 do
+	for _ = 1, 32 do
 		local x, y, z = posAxis(), posAxis(), posAxis()
 		-- local r = size()
 		local r = 1 -- Consistent size
@@ -148,16 +167,24 @@ function love.load()
 			radius = r
 		}
 	end
-
-	-- objects = {
-	-- 	{
-	-- 		type = "AABB",
-	-- 		position = vec3(2, 2, 4.95),
-	-- 		sideLengths = vec3(6, 6, 0.1)
-	-- 	}
-	-- }
+	for _ = 1, 5 do
+		local x, y, z = posAxis(), posAxis(), posAxis()
+		local minSize = 0.5
+		local maxSize = 2
+		local r = love.math.random() * (maxSize - minSize) + minSize
+		objects[#objects + 1] = {
+			type = "blackHole",
+			position = vec3(x, y, z),
+			radius = r,
+			gravityExponent = -2,
+			gravityStrength = r / maxSize * 100,
+			colour = {0, 0, 0}
+		}
+	end
 
 	time = 0
+
+	showHelp = true
 end
 
 function love.mousepressed()
@@ -219,6 +246,13 @@ function love.keypressed(key)
 		fisheyeRetina()
 	elseif key == "3" then
 		ellipsoidFisheyeRetina()
+
+	elseif key == "b" then
+		enableBlackHoles = not enableBlackHoles
+		currentCanvasScale = enableBlackHoles and blackHoleCanvasScale or noBlackHoleCanvasScale
+		rebuildCanvas()
+	elseif key == "h" then
+		showHelp = not showHelp
 	end
 end
 
@@ -239,18 +273,16 @@ function love.draw()
 
 	shader:send("skyColour", {0.1, 0.1, 0.1})
 
-	if true then
+	if enableBlackHoles then
 		shader:send("initialRaySpeed", 10)
 		shader:send("maxRaySteps", 200)
 		shader:send("rayTimestep", 0.025)
-		shader:send("blackHolePosition", {5, 5, 5})
-		shader:send("blackHoleRadius", 1.5)
-		shader:send("blackHoleGravity", 30)
-		shader:send("blackHoleExponentPositive", 2) -- 2 for inverse square law gravity (distance ^ -2)
-		shader:send("blackHoleColour", {0, 0, 0})
 		shader:send("limitedRays", true)
 	else
-
+		shader:send("initialRaySpeed", 1)
+		shader:send("maxRaySteps", 1)
+		shader:send("rayTimestep", 1)
+		shader:send("limitedRays", false)
 	end
 
 	-- TODO: Different types of pupil and retina
@@ -294,5 +326,16 @@ function love.draw()
 	-- TODO: Skybox, Elite-style indicator showing where forward vector is relative to current orientation, etc (does the skybox need special perspective handling?)
 
 	love.graphics.setCanvas()
-	love.graphics.draw(canvas, 0, love.graphics.getHeight(), 0, 1 / canvasScale, -1 / canvasScale)
+	love.graphics.draw(canvas, 0, love.graphics.getHeight(), 0, 1 / currentCanvasScale, -1 / currentCanvasScale)
+
+	if showHelp then
+		love.graphics.print(
+			"WASDQE: Translate\n" ..
+			"IJKLUO and mouse: Rotate\n" ..
+			"Click: Grab/ungrab mouse\n" ..
+			"B: Toggle black holes (and limited segmented rays and reduced resolution)\n" ..
+			"1: Linear, 2: Spherical fisheye, 3: Ellipsoid Fisheye\n" ..
+			"H: Toggle help"
+		)
+	end
 end
