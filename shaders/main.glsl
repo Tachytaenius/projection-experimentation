@@ -236,6 +236,7 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords)
 		for (int i = 0; i < numBlackHoles; i++ ) {
 			BlackHole blackHole = blackHoles[i];
 			vec3 rayToBlackHole = blackHole.position - currentRayStart;
+			// Different distance metrics cause different gravitational lensing shapes, due to "differently shaped" gravity wells!
 			rayVelocity += normalize(rayToBlackHole) * blackHole.gravityStrength * pow(length(rayToBlackHole), blackHole.gravityExponent) * rayTimestep;
 		}
 
