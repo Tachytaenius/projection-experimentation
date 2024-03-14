@@ -217,8 +217,7 @@ function love.update(dt)
 	local maxAngularSpeed = math.tau * 2
 	local keyboardRotationSpeed = math.tau / 4
 	local keyboardRotationMultiplier = keyboardRotationSpeed / maxAngularSpeed
-	local mouseMovementForMaxSpeed = 2.5 -- Move 10 units to rotate by maxAngularSpeed radians per second
-	local mouseMovementMultiplier = 1 / (mouseMovementForMaxSpeed * maxAngularSpeed)
+	local mouseMovementForMaxSpeed = 20
 	local rotation = vec3()
 	if love.keyboard.isDown("k") then rotation = rotation + rightVector * keyboardRotationMultiplier end
 	if love.keyboard.isDown("i") then rotation = rotation - rightVector * keyboardRotationMultiplier end
@@ -226,8 +225,8 @@ function love.update(dt)
 	if love.keyboard.isDown("j") then rotation = rotation - upVector * keyboardRotationMultiplier end
 	if love.keyboard.isDown("u") then rotation = rotation + forwardVector * keyboardRotationMultiplier end
 	if love.keyboard.isDown("o") then rotation = rotation - forwardVector * keyboardRotationMultiplier end
-	rotation = rotation + upVector * mouseDx * mouseMovementMultiplier
-	rotation = rotation + rightVector * mouseDy * mouseMovementMultiplier
+	rotation = rotation + upVector * mouseDx / mouseMovementForMaxSpeed
+	rotation = rotation + rightVector * mouseDy / mouseMovementForMaxSpeed
 	eye.orientation = quat.normalise(eye.orientation * quat.fromAxisAngle(limitVectorLength(rotation, 1) * maxAngularSpeed * dt))
 
 	time = time + dt
