@@ -244,7 +244,7 @@ vec4 effect(vec4 colour, sampler2D image, vec2 textureCoords, vec2 windowCoords)
 	}
 
 	vec3 skyColour = solidSky ? solidSkyColour : sampleSky(
-		normalize(currentRayStart + rayVelocity * rayTimestep)
+		normalize(rayVelocity * rayTimestep)
 	);
 	return vec4(skyColour, 1.0);
 }
